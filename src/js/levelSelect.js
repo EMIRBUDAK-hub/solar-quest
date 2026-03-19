@@ -93,7 +93,7 @@ export default class LevelSelect extends Phaser.Scene {
   }
 
   getUnlockedLevel() {
-    const stored = Number(window.localStorage.getItem('solarQuestUnlockedLevel') || '1');
+    const stored = Number(window.sessionStorage.getItem('solarQuestUnlockedLevel') || '1');
     if (!Number.isFinite(stored) || stored < 1) return 1;
     return Math.min(3, stored);
   }

@@ -665,7 +665,7 @@ export default class niveau1 extends Phaser.Scene {
     if (this.finishTriggered) return;
     this.finishTriggered = true;
     this.hasWon = true;
-    window.localStorage.setItem('solarQuestUnlockedLevel', String(Math.max(2, Number(window.localStorage.getItem('solarQuestUnlockedLevel') || '1'))));
+window.sessionStorage.setItem('solarQuestUnlockedLevel', String(Math.max(2, Number(window.sessionStorage.getItem('solarQuestUnlockedLevel') || '1'))));
     this.player.setVelocity(0, 0);
     this.player.setAcceleration(0, 0);
     this.player.body.enable = false;

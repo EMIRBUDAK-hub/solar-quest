@@ -437,8 +437,7 @@ function validerNiveau2(scene) {
     levelFinished = true;
     player.setVelocity(0, 0);
     player.body.moves = false;
-    window.localStorage.setItem('solarQuestUnlockedLevel', String(Math.max(3, Number(window.localStorage.getItem('solarQuestUnlockedLevel') || '1')))); // débloque le niveau 3
-
+    window.sessionStorage.setItem('solarQuestUnlockedLevel', String(Math.max(3, Number(window.sessionStorage.getItem('solarQuestUnlockedLevel') || '1')))); // débloque le niveau 3
     const message = scene.add.text(400, 280, 'Niveau 2 validé !\nNiveau 3 débloqué', {
         fontSize: '34px',
         align: 'center',
