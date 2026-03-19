@@ -420,7 +420,7 @@ function ramasserHorloge(un_player, une_horloge) {
     zone_texte_timer.setText("Temps: " + Math.ceil(tempsRestant));
 }
 
-function finirPartie(scene) { // a bloque le joueur et pr la scene du joueur
+function finirPartie(scene) {
     if (gameOver) return;
 
     gameOver = true;
@@ -429,6 +429,20 @@ function finirPartie(scene) { // a bloque le joueur et pr la scene du joueur
     player.body.moves = false;
     player.anims.stop();
     player.setFrame(0);
+
+    const messageDefaite = scene.add.text(400, 280, 'DÉFAITE...', {
+        fontSize: '48px',
+        align: 'center',
+        fill: '#ff4d4d',
+        backgroundColor: '#102030',
+        padding: { left: 18, right: 18, top: 12, bottom: 12 },
+        stroke: '#000000',
+        strokeThickness: 6
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(300);
+
+    scene.time.delayedCall(2000, () => {
+        scene.scene.start('levelSelect');
+    });
 }
 
 function validerNiveau2(scene) {

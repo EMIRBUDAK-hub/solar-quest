@@ -1,21 +1,31 @@
+// --- CONSTANTES DE JEU ---
+// Position de réapparition par défaut si aucun spawn n'est trouvé
 const DEFAULT_SPAWN = { x: 120, y: 120 };
 
+// Identifiants (GIDs) des tuiles provenant de Tiled pour identifier les zones spéciales
 const WATER_GIDS = new Set([109, 110, 111, 112, 113]);
 const LAVA_GIDS = new Set([1030, 1032]);
 const SPIKE_GIDS = new Set([691, 692, 703, 704]);
+// Regroupement des GIDs pour simplifier les tests de collision mortelle
 const HAZARD_GIDS = new Set([...WATER_GIDS, ...LAVA_GIDS, ...SPIKE_GIDS]);
 const NON_SOLID_GIDS = new Set([...WATER_GIDS, ...LAVA_GIDS]);
 const STARTING_LIVES = 5;
 
 export default class niveau1 extends Phaser.Scene {
   constructor() {
+    // Clé unique pour identifier cette scène dans Phaser
     super({ key: 'niveau1' });
   }
 
+  /**
+   * Chargement de toutes les ressources (images, sons, données JSON)
+   */
   preload() {
+    // Fond et Carte
     this.load.image('bg_meteor', 'src/assets/meteor_parallax_bg.png');
     this.load.tilemapTiledJSON('map', 'src/assets/tilemap/carte1ermap.tmj');
 
+    // Chargement des différents Tilesets (images utilisées par la carte)
     this.load.image('ts_tuile', 'src/assets/tilemap/Tiles1.png');
     this.load.image('ts_caillou', 'src/assets/tilemap/Props-Rocks.png');
     this.load.image('ts_interieur', 'src/assets/tilemap/Interior-01.png');
@@ -24,29 +34,44 @@ export default class niveau1 extends Phaser.Scene {
     this.load.image('ts_jeu', 'src/assets/tilemap/Hive.png');
     this.load.image('ts_textureprojet', 'src/assets/tilemap/textureprojet.png');
 
+    // Personnage et objets
     this.load.spritesheet('astronaut', 'src/assets/astronaut_sheet.png', { frameWidth: 32, frameHeight: 40 });
     this.load.image('checkpoint_flag', 'src/assets/checkpoint_flag.png');
+    
+    // Audio
+    this.load.audio('meteor_sound', 'src/assets/meteor.mp3');
+    this.load.audio('checkpoint_sound', 'src/assets/checkpoint.mp3');
   }
 
+  /**
+   * Initialisation des éléments de jeu une fois les ressources chargées
+   */
   create() {
+    // Variables d'état
     this.hasWon = false;
     this.finishTriggered = false;
     this.lives = STARTING_LIVES;
     this.isRespawning = false;
-    this._buildMeteorTexture();
-    this.createAnimations();
-    this.createMapLevel();
-    this.setupMeteors();
-    this.createHUD();
-    this.createControls();
 
+    // Initialisation des systèmes de jeu
+    this._buildMeteorTexture(); // Génération dynamique de l'image du météore
+    this.createAnimations();    // Création des cycles d'animation (marche, etc.)
+    this.createMapLevel();      // Mise en place du décor et de la physique
+    this.setupMeteors();        // Système d'apparition des météores
+    this.createHUD();           // Affichage (Vies, instructions)
+    this.createControls();      // Configuration des touches du clavier
+
+    // Configuration de la caméra pour suivre le joueur
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.setDeadzone(220, 120);
+    this.cameras.main.setDeadzone(220, 120); // Zone centrale où la caméra ne bouge pas
   }
 
+  /**
+   * Génère manuellement une spritesheet pour les météores à l'aide de primitives graphiques
+   */
   _buildMeteorTexture() {
-    const S = 42;
-    const F = 8;
+    const S = 42; // Taille du carré de la frame
+    const F = 8;  // Nombre de frames (étapes de rotation)
 
     if (this.textures.exists('meteor_sheet')) return;
 
@@ -54,31 +79,25 @@ export default class niveau1 extends Phaser.Scene {
 
     for (let f = 0; f < F; f++) {
       const ox = f * S;
-      const a = (f / F) * Math.PI * 2;
+      const a = (f / F) * Math.PI * 2; // Angle pour la rotation visuelle
       const ca = Math.cos(a), sa = Math.sin(a);
 
+      // Dessin des couches du météore (ombre, corps, cratères, reflets)
       g.fillStyle(0x110500, 0.8);
       g.fillEllipse(ox + S / 2 + 2.5, S / 2 + 2.5, S * 0.78, S * 0.60);
-
       g.fillStyle(0x8a6a40, 1);
       g.fillEllipse(ox + S / 2, S / 2, S * 0.80, S * 0.62);
-
       g.fillStyle(0x6b4e2c, 1);
       g.fillEllipse(ox + S / 2 + ca * 4, S / 2 + sa * 3, S * 0.50, S * 0.38);
-
       g.fillStyle(0x3a220e, 1);
       g.fillEllipse(ox + S / 2 + ca * 5, S / 2 + sa * 5, S * 0.28, S * 0.20);
-
       g.fillStyle(0xd4a060, 1);
       g.fillEllipse(ox + S / 2 - ca * 7, S / 2 - sa * 7, S * 0.22, S * 0.16);
-
       g.fillStyle(0x281408, 1);
       g.fillCircle(ox + S / 2 + ca * 9, S / 2 + sa * 6, 4.5);
       g.fillCircle(ox + S / 2 - ca * 5, S / 2 - sa * 9 + 2, 3);
-
       g.fillStyle(0x1a0a04, 1);
       g.fillCircle(ox + S / 2 - ca * 8, S / 2 + sa * 4, 2.2);
-
       g.fillStyle(0xfff8e0, 1);
       g.fillCircle(ox + S / 2 - ca * 8, S / 2 - sa * 8, 2.2);
       g.fillStyle(0xffffff, 0.7);
@@ -88,10 +107,14 @@ export default class niveau1 extends Phaser.Scene {
     g.generateTexture('meteor_sheet', S * F, S);
     g.destroy();
 
+    // Découpage de la texture générée en frames utilisables
     const tex = this.textures.get('meteor_sheet');
     for (let i = 0; i < F; i++) tex.add(i, 0, i * S, 0, S, S);
   }
 
+  /**
+   * Définit les animations du joueur et des météores
+   */
   createAnimations() {
     if (!this.anims.exists('player-idle')) {
       this.anims.create({
@@ -121,9 +144,13 @@ export default class niveau1 extends Phaser.Scene {
     }
   }
 
+  /**
+   * Construction du monde (tuiles, physique, parallax et joueur)
+   */
   createMapLevel() {
     this.map = this.make.tilemap({ key: 'map' });
 
+    // Liaison des images aux noms des tilesets définis dans Tiled
     const tilesets = [
       this.map.addTilesetImage('tuile', 'ts_tuile'),
       this.map.addTilesetImage('caillou', 'ts_caillou'),
@@ -137,9 +164,11 @@ export default class niveau1 extends Phaser.Scene {
     const worldWidth = this.map.widthInPixels;
     const worldHeight = this.map.heightInPixels;
 
+    // Limites du monde physique et de la caméra
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
 
+    // Image de fond avec effet Parallax (bouge moins vite que le joueur)
     const bgScale = Math.max(this.scale.width / this.textures.get('bg_meteor').getSourceImage().width, this.scale.height / this.textures.get('bg_meteor').getSourceImage().height) * 1.22;
     this.parallaxBg = this.add.image(this.scale.width / 2, this.scale.height / 2, 'bg_meteor')
       .setScrollFactor(0)
@@ -151,6 +180,7 @@ export default class niveau1 extends Phaser.Scene {
     this.bgMaxOffsetX = Math.max(0, (this.parallaxBg.displayWidth - this.scale.width) / 2);
     this.bgMaxOffsetY = Math.max(0, (this.parallaxBg.displayHeight - this.scale.height) / 2);
 
+    // Création automatique de tous les calques présents dans le fichier JSON
     this.renderedLayers = [];
     this.map.layers.forEach((layerData, index) => {
       const layer = this.map.createLayer(layerData.name, tilesets, 0, 0);
@@ -162,22 +192,26 @@ export default class niveau1 extends Phaser.Scene {
 
     this.groundLayer = this.renderedLayers[0] || null;
 
+    // Configuration des points de départ et checkpoints
     this.spawnPoint = this.findSpawnPoint() || DEFAULT_SPAWN;
     this.currentRespawnPoint = { ...this.spawnPoint };
     this.checkpointPoints = this.findCheckpointPoints();
 
+    // Initialisation du joueur
     this.player = this.physics.add.sprite(this.spawnPoint.x, this.spawnPoint.y, 'astronaut', 0);
     this.player.setCollideWorldBounds(true);
     this.player.setBounce(0);
-    this.player.setDragX(900);
+    this.player.setDragX(900); // Friction pour s'arrêter plus vite
     this.player.setMaxVelocity(320, 900);
-    this.player.body.setSize(24, 38).setOffset(4, 2);
+    this.player.body.setSize(24, 38).setOffset(4, 2); // Ajustement de la hitbox
     this.player.play('player-idle');
-    this.player.jumpsLeft = 2;
+    this.player.jumpsLeft = 2; // Pour le double saut
 
+    // Gestion des collisions par calque
     this.renderedLayers.forEach((layer) => {
-      layer.setCollisionByExclusion([-1]);
+      layer.setCollisionByExclusion([-1]); // Tout entre en collision par défaut
       layer.forEachTile((tile) => {
+        // Mais on affine selon la nature de la tuile (solide ou non)
         tile.setCollision(this.shouldTileCollide(tile));
       });
       this.physics.add.collider(this.player, layer, this.onPlayerHitTile, null, this);
@@ -186,6 +220,9 @@ export default class niveau1 extends Phaser.Scene {
     this.createCheckpoints();
   }
 
+  /**
+   * Vérifie si une tuile doit bloquer le joueur
+   */
   shouldTileCollide(tile) {
     if (!tile || tile.index === -1) return false;
     return !NON_SOLID_GIDS.has(tile.index);
@@ -195,6 +232,9 @@ export default class niveau1 extends Phaser.Scene {
     return this.shouldTileCollide(tile);
   }
 
+  /**
+   * Analyse les calques de haut en bas pour trouver une tuile à un point précis
+   */
   getTopmostTileAt(x, y) {
     for (let i = this.renderedLayers.length - 1; i >= 0; i -= 1) {
       const tile = this.renderedLayers[i].getTileAt(x, y);
@@ -207,6 +247,9 @@ export default class niveau1 extends Phaser.Scene {
     return this.renderedLayers.some((layer) => this.isSolidTile(layer.getTileAt(x, y)));
   }
 
+  /**
+   * Algorithme pour trouver un sol vide au début de la carte pour faire apparaître le joueur
+   */
   findSpawnPoint() {
     for (let x = 0; x < this.map.width; x += 1) {
       for (let y = this.map.height - 2; y >= 1; y -= 1) {
@@ -214,6 +257,7 @@ export default class niveau1 extends Phaser.Scene {
         const aboveSolid = this.hasSolidAt(x, y - 1);
         const belowSolid = this.hasSolidAt(x, y + 1);
 
+        // Si l'espace est vide et qu'il y a un sol dessous
         if (!currentSolid && !aboveSolid && belowSolid) {
           return {
             x: x * this.map.tileWidth + this.map.tileWidth / 2,
@@ -225,7 +269,9 @@ export default class niveau1 extends Phaser.Scene {
     return null;
   }
 
-
+  /**
+   * Cherche un point sûr pour placer un checkpoint à un certain pourcentage de la carte
+   */
   findCheckpointForRatio(ratio) {
     const targetX = Math.floor(this.map.width * ratio);
     const searchRadius = Math.floor(this.map.width * 0.18);
@@ -258,11 +304,14 @@ export default class niveau1 extends Phaser.Scene {
     };
   }
 
+  /**
+   * Définit les emplacements stratégiques des checkpoints
+   */
   findCheckpointPoints() {
     const preferredTilePoints = [
-      { x: 46, y: 26 },   // un peu après le début, sur une plateforme accessible
-      { x: 198, y: 33 },  // milieu
-      { x: 388, y: 28 }   // un peu avant la fin, sur une plateforme accessible
+      { x: 46, y: 26 },   // Début
+      { x: 198, y: 33 },  // Milieu
+      { x: 388, y: 28 }   // Fin
     ];
 
     const found = [];
@@ -285,7 +334,9 @@ export default class niveau1 extends Phaser.Scene {
     return found;
   }
 
-
+  /**
+   * Déclenche la mort si le joueur touche un danger (piques, lave, etc.)
+   */
   onPlayerHitTile(_player, tile) {
     if (!tile || this.isRespawning) return true;
 
@@ -297,6 +348,9 @@ export default class niveau1 extends Phaser.Scene {
     return true;
   }
 
+  /**
+   * Création visuelle et physique des drapeaux de checkpoint
+   */
   createCheckpoints() {
     this.checkpoints = [];
     if (!this.checkpointPoints || !this.checkpointPoints.length) return;
@@ -309,6 +363,7 @@ export default class niveau1 extends Phaser.Scene {
       const flag = this.add.image(0, 6, 'checkpoint_flag').setOrigin(0.18, 1).setScale(0.9);
       container.add([glow, flag]);
 
+      // Zone invisible pour détecter le passage du joueur
       const zone = this.add.zone(point.x, baseY - 24, 44, 78);
       this.physics.world.enable(zone);
       zone.body.setAllowGravity(false);
@@ -329,6 +384,9 @@ export default class niveau1 extends Phaser.Scene {
     });
   }
 
+  /**
+   * Active un checkpoint et met à jour le point de respawn
+   */
   activateCheckpoint(index) {
     const checkpoint = this.checkpoints?.[index];
     if (!checkpoint || checkpoint.activated) return;
@@ -336,9 +394,11 @@ export default class niveau1 extends Phaser.Scene {
     checkpoint.activated = true;
     this.currentRespawnPoint = { ...checkpoint.point };
 
+    // Changement visuel (devient vert)
     checkpoint.flag.setTint(0x7cffb2);
     checkpoint.glow.setFillStyle(0x4dff88, 0.35);
 
+    // Feedback texte
     if (this.checkpointText) this.checkpointText.destroy();
     this.checkpointText = this.add.text(this.scale.width / 2, 96, 'Checkpoint activé', {
       fontFamily: 'Arial',
@@ -354,17 +414,23 @@ export default class niveau1 extends Phaser.Scene {
         this.checkpointText = null;
       }
     });
+    this.sound.play('checkpoint_sound', { volume: 0.8 });
   }
 
+  /**
+   * Mise en place du système de particules et du groupe de météores
+   */
   setupMeteors() {
     this.meteors = this.physics.add.group();
     this._meteorGlows = new Map();
 
+    // Collisions météores avec le sol et le joueur
     this.renderedLayers.forEach((layer) => {
       this.physics.add.collider(this.meteors, layer, this._onMeteorImpact, null, this);
     });
     this.physics.add.overlap(this.player, this.meteors, this._onMeteorHitPlayer, null, this);
 
+    // Création de la texture de poussière pour l'explosion
     if (!this.textures.exists('dust_dot')) {
       const gd = this.make.graphics({ x: 0, y: 0, add: false });
       gd.fillStyle(0xc49a5a, 1);
@@ -373,6 +439,7 @@ export default class niveau1 extends Phaser.Scene {
       gd.destroy();
     }
 
+    // Émetteur de particules pour les impacts
     this.dustEmitter = this.add.particles(0, 0, 'dust_dot', {
       speed: { min: 60, max: 180 },
       angle: { min: 190, max: 350 },
@@ -387,6 +454,9 @@ export default class niveau1 extends Phaser.Scene {
     this._scheduleMeteor();
   }
 
+  /**
+   * Planifie l'apparition du prochain météore (boucle récursive)
+   */
   _scheduleMeteor() {
     this.time.delayedCall(Phaser.Math.Between(1400, 2800), () => {
       if (!this.hasWon) this._spawnMeteor();
@@ -394,6 +464,9 @@ export default class niveau1 extends Phaser.Scene {
     });
   }
 
+  /**
+   * Crée un météore à une position aléatoire au-dessus de la caméra
+   */
   _spawnMeteor() {
     const worldW = this.map.widthInPixels;
     const camX = this.cameras.main.scrollX;
@@ -407,16 +480,21 @@ export default class niveau1 extends Phaser.Scene {
     m.body.setAllowGravity(false);
     m.setDepth(6);
 
+    // Vitesse et rotation selon la trajectoire
     const vx = Phaser.Math.Between(-90, 90);
     const vy = Phaser.Math.Between(280, 460);
     m.setVelocity(vx, vy);
     m.rotation = Math.atan2(vy, vx) - Math.PI / 2;
     m.play('meteor-spin');
 
+    // Halo lumineux attaché au météore
     const glow = this.add.ellipse(sx, -30, 62, 42, 0xff5500, 0.28).setDepth(5);
     this._meteorGlows.set(m, glow);
   }
 
+  /**
+   * Gère l'impact d'un météore au sol
+   */
   _onMeteorImpact(meteor) {
     if (!meteor.active) return;
     this._doImpact(meteor.x, meteor.y);
@@ -428,6 +506,9 @@ export default class niveau1 extends Phaser.Scene {
     meteor.destroy();
   }
 
+  /**
+   * Gère l'impact d'un météore sur le joueur
+   */
   _onMeteorHitPlayer(player, meteor) {
     if (!meteor.active) return;
     this._doImpact(meteor.x, meteor.y);
@@ -440,12 +521,16 @@ export default class niveau1 extends Phaser.Scene {
     this.loseLifeAndRespawn();
   }
 
+  /**
+   * Effets visuels et sonores de l'explosion du météore
+   */
   _doImpact(ix, iy) {
-    this.cameras.main.shake(380, 0.022);
+    this.cameras.main.shake(380, 0.022); // Tremblement de terre
 
     this.dustEmitter.setPosition(ix, iy);
     this.dustEmitter.explode(18);
 
+    // Flash central
     const flash = this.add.circle(ix, iy, 34, 0xffaa33, 0.92).setDepth(14);
     this.tweens.add({
       targets: flash,
@@ -457,6 +542,7 @@ export default class niveau1 extends Phaser.Scene {
       onComplete: () => flash.destroy()
     });
 
+    // Anneau d'onde de choc
     const ring = this.add.circle(ix, iy, 14, 0xffffff, 0).setDepth(13);
     ring.setStrokeStyle(4, 0xffcc55, 1.0);
     this.tweens.add({
@@ -469,6 +555,7 @@ export default class niveau1 extends Phaser.Scene {
       onComplete: () => ring.destroy()
     });
 
+    // Éclats (débris) projetés
     for (let i = 0; i < 8; i++) {
       const shard = this.add.circle(
         ix + Phaser.Math.Between(-10, 10),
@@ -491,8 +578,12 @@ export default class niveau1 extends Phaser.Scene {
         onComplete: () => shard.destroy()
       });
     }
+    this.sound.play('meteor_sound', { volume: 0.6 });
   }
 
+  /**
+   * Interface Utilisateur (Vies et Commandes)
+   */
   createHUD() {
     this.infoText = this.add.text(
       20,
@@ -518,13 +609,15 @@ export default class niveau1 extends Phaser.Scene {
     this.updateLivesText();
   }
 
-
   updateLivesText() {
     if (this.livesText) {
       this.livesText.setText(`Vies : ${this.lives}`);
     }
   }
 
+  /**
+   * Vérifie si la hitbox du joueur touche une tuile appartenant à un groupe (danger)
+   */
   isPlayerTouchingHazard(gidSet) {
     if (!this.player || !this.player.body) return false;
 
@@ -548,6 +641,9 @@ export default class niveau1 extends Phaser.Scene {
     return this.isPlayerTouchingHazard(SPIKE_GIDS);
   }
 
+  /**
+   * Logique de perte de vie
+   */
   loseLifeAndRespawn() {
     if (this.isRespawning) return;
 
@@ -556,13 +652,11 @@ export default class niveau1 extends Phaser.Scene {
     this.updateLivesText();
 
     if (this.lives <= 0) {
-      this.time.delayedCall(250, () => {
-        this.scene.restart();
-      });
+      this.showDefeat();
       return;
     }
 
-    this.player.disableBody(true, true);
+    this.player.disableBody(true, true); // Cache le joueur
 
     this.time.delayedCall(250, () => {
       this.respawnPlayer();
@@ -584,9 +678,13 @@ export default class niveau1 extends Phaser.Scene {
     this.player.jumpsLeft = 2;
   }
 
+  /**
+   * Boucle principale de mise à jour (tourne 60 fois par seconde)
+   */
   update() {
+    // Touche de retour menu
     if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
-      this.scene.restart();
+      this.scene.start('levelSelect');
       return;
     }
 
@@ -594,6 +692,7 @@ export default class niveau1 extends Phaser.Scene {
       return;
     }
 
+    // --- MOUVEMENT DU JOUEUR ---
     const moveLeft = this.cursors.left.isDown;
     const moveRight = this.cursors.right.isDown;
     const jumpPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keySpace);
@@ -605,9 +704,10 @@ export default class niveau1 extends Phaser.Scene {
       this.player.setAccelerationX(900);
       this.player.setFlipX(false);
     } else {
-      this.player.setAccelerationX(0);
+      this.player.setAccelerationX(0); // S'arrête progressivement grâce au DragX
     }
 
+    // Gestion du saut et double saut
     if ((this.player.body.blocked.down || this.player.body.touching.down) && jumpPressed) {
       this.player.setVelocityY(-250);
       this.player.jumpsLeft = 1;
@@ -617,11 +717,13 @@ export default class niveau1 extends Phaser.Scene {
     }
 
     if (this.player.body.blocked.down) {
-      this.player.jumpsLeft = 2;
+      this.player.jumpsLeft = 2; // Réinitialise les sauts au sol
     }
 
+    // Animation selon la vitesse
     this.player.play(Math.abs(this.player.body.velocity.x) > 8 ? 'player-run' : 'player-idle', true);
 
+    // --- EFFET PARALLAX DU FOND ---
     if (this.parallaxBg) {
       const rawOffsetX = this.cameras.main.scrollX * 0.10;
       const rawOffsetY = this.cameras.main.scrollY * 0.04;
@@ -631,11 +733,13 @@ export default class niveau1 extends Phaser.Scene {
       this.parallaxBg.y = this.bgBaseY - offsetY;
     }
 
+    // --- MISE À JOUR DES MÉTÉORES ---
     if (this.meteors) {
       this.meteors.children.iterate((m) => {
         if (!m || !m.active) return;
         const glow = this._meteorGlows.get(m);
         if (glow) glow.setPosition(m.x, m.y);
+        // Détruit le météore s'il sort des limites du monde
         if (m.y > this.physics.world.bounds.height + 120 || m.x < -100 || m.x > this.physics.world.bounds.width + 100) {
           if (glow) {
             glow.destroy();
@@ -646,6 +750,7 @@ export default class niveau1 extends Phaser.Scene {
       });
     }
 
+    // Vérification constante des dangers et chutes dans le vide
     if (this.isPlayerTouchingWater() || this.isPlayerTouchingSpikes()) {
       this.loseLifeAndRespawn();
       return;
@@ -655,17 +760,23 @@ export default class niveau1 extends Phaser.Scene {
       this.loseLifeAndRespawn();
     }
 
+    // Vérification de la condition de victoire (atteinte de la fin de la carte)
     if (!this.finishTriggered && this.player.x >= this.map.widthInPixels - 140) {
       this.completeLevel();
     }
   }
 
-
+  /**
+   * Gère la réussite du niveau
+   */
   completeLevel() {
     if (this.finishTriggered) return;
     this.finishTriggered = true;
     this.hasWon = true;
-window.sessionStorage.setItem('solarQuestUnlockedLevel', String(Math.max(2, Number(window.sessionStorage.getItem('solarQuestUnlockedLevel') || '1'))));
+    
+    // Débloque le niveau 2 dans le stockage de session
+    window.sessionStorage.setItem('solarQuestUnlockedLevel', String(Math.max(2, Number(window.sessionStorage.getItem('solarQuestUnlockedLevel') || '1'))));
+    
     this.player.setVelocity(0, 0);
     this.player.setAcceleration(0, 0);
     this.player.body.enable = false;
@@ -687,4 +798,30 @@ window.sessionStorage.setItem('solarQuestUnlockedLevel', String(Math.max(2, Numb
     });
   }
 
+  /**
+   * Affiche l'écran de défaite
+   */
+  showDefeat() {
+    if (this.finishTriggered) return;
+    this.finishTriggered = true;
+
+    this.physics.pause();
+    this.player.setVelocity(0, 0);
+
+    const txt = this.add.text(
+      this.scale.width / 2,
+      this.scale.height / 2,
+      "DÉFAITE...",
+      {
+        fontSize: '48px',
+        color: '#ff0000',
+        stroke: '#000',
+        strokeThickness: 6
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(50);
+
+    this.time.delayedCall(2000, () => {
+      this.scene.start('levelSelect');
+    });
+  }
 }
