@@ -15,9 +15,9 @@ export default class niveau3 extends Phaser.Scene {
 
     preload() {
         // Chargement du fichier JSON qui contient la disposition des tuiles
-        this.load.tilemapTiledJSON('map', 'src/assets/mapboss.json');
+        this.load.tilemapTiledJSON('mapBoss', 'src/assets/mapboss.json');
         // Chargement de l'image (tileset) utilisée pour dessiner la map
-        this.load.image('tiles', 'src/assets/maplave.png');
+        this.load.image('tilesBoss', 'src/assets/maplave.png');
 
         // Chargement des images des personnages et des projectiles
         this.load.image('player', 'src/assets/player.png');
@@ -32,9 +32,9 @@ export default class niveau3 extends Phaser.Scene {
 
         // --- MAP & MONDE ---
         // Initialisation de la carte à partir du JSON chargé
-        const map = this.make.tilemap({ key: 'map' });
+        const map = this.make.tilemap({ key: 'mapBoss' });
         // Liaison entre le nom du tileset dans Tiled ('map') et l'image chargée ('tiles')
-        const tileset = map.addTilesetImage('map', 'tiles');
+        const tileset = map.addTilesetImage('map', 'tilesBoss');
         // Création des couches visuelles (fond de lave et plateformes solides)
         this.lavaLayer = map.createLayer('lave', tileset, 0, 0);
         this.platformLayer = map.createLayer('plateformes', tileset, 0, 0);
